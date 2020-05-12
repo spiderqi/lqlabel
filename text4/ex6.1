@@ -1,0 +1,75 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Mar 17 17:01:43 2020
+
+@author: 15272
+"""
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import collections
+import math
+import numpy as np
+
+df=pd.read_excel('D:/生存分析/text4/table4.3.xlsx')#load data
+
+
+def Nelson(di,yi):
+    Ht=di/yi
+    vht=di/(yi**2)
+    return Ht.cumsum(),vht.cumsum()
+
+def Epane(x,q):
+    if x<=q and x>=-1:
+        return (1-x**2)*3/4
+    else:
+        return 0
+
+def kernel(t,time,h=100):
+    s=(t-time)/h
+    if t<h:
+        q=t/h
+    elif t>662-h:
+        q=(662-t)/h
+    else:
+        q=1
+    ks=s.apply(lambda x:Epane(x,q))
+    alpha=64*(2-4*q+6*q**2-3*q**3)/((1+q)**4*(19-18*q+3*q**2))
+    beta=240*(1-q)**2/((1+q)**4*(19-18*q+3*q**2))
+    s1=alpha+beta*s
+    return s,ks*s1
+
+def hhat(time,dHt,dVht,h=100):
+    n=len(time)
+    t=np.linspace(h,time[n-2],time[n-2]-h+1)
+    h1,vh1=[0]*len(t),[0]*len(t)
+    for i in range(len(t)):
+        s,ks=kernel(t[i],time)
+        h1[i]=np.sum(ks*dHt)/h
+        vh1[i]=np.sum(ks**2*dVht)/(h**2)
+    t,h1,vh1=conc(t,h1,vh1,time,dHt,dVht,h)
+    return t,h1,vh1
+
+def conc(t,h1,vh1,time,dHt,dVht,h=100):
+    status=time<=h
+    n=len(time)
+    h1=list(dHt[status])+h1+[dHt[n-2]]
+    vh1=list(dVht[status])+vh1+[dVht[n-2]]
+    t=list(time[status])+list(t)+[time[n-2]]
+    return t,h1,vh1
+
+Ht,Vht=Nelson(df['di'],df['Yi'])
+sigmaH=np.sqrt(Vht)#standard 
+dHt,dVht=Ht.diff(),Vht.diff()#calculate differ sequence
+dHt[0],dVht[0]=Ht[0],Vht[0]
+t1,kt1=kernel(150,df['ti'])
+t2,kt2=kernel(50,df['ti'])
+t3,kt3=kernel(600,df['ti'])
+dt=pd.DataFrame({'time':df['ti'],'dHt':dHt,'dVht':dVht,'150-ti/100':t1,'K(150-ti/100)':kt1,
+               '50-ti/100':t2,'K(50-ti/100)':kt2,'600-ti/100':t3,'K(600-ti/100)':kt3,})
+
+#Figure 6.1
+t,h1,vh1=hhat(df['ti'],dHt,dVht)
+plt.plot(h1)
+plt.plot(h1+np.sqrt(vh1))
+plt.plot(h1-np.sqrt(vh1))
